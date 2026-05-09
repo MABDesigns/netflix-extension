@@ -1,0 +1,1 @@
+// background.js — placeholder, required by manifest
