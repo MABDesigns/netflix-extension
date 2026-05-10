@@ -5,7 +5,7 @@
 **Show what you're watching on Netflix directly in your Discord status — in real time.**
 
 ![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?style=flat-square&logo=node.js&logoColor=white)
-![Firefox](https://img.shields.io/badge/Firefox-Extension-FF7139?style=flat-square&logo=firefox&logoColor=white)
+![Edge](https://img.shields.io/badge/Microsoft%20Edge-Extension-0078D7?style=flat-square&logo=microsoft-edge&logoColor=white)
 ![Discord](https://img.shields.io/badge/Discord-Rich%20Presence-5865F2?style=flat-square&logo=discord&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
 
@@ -15,12 +15,12 @@
 
 ## ✨ What it does
 
-Netflix Discord RPC automatically detects what you're watching on Netflix (Firefox) and displays it as a **Rich Presence** activity on your Discord profile — including the show title, episode name, and a live playback timer.
+Netflix Discord RPC automatically detects what you're watching on Netflix (Microsoft Edge) and displays it as a **Rich Presence** activity on your Discord profile — including the show title, episode name, and a live playback timer.
 
 ```
-🎬 Watching: Stranger Things
-   📺 S4 E1 — The Hellfire Club
-   ⏱ 00:42:17 remaining
+🎬 Watching: Lucifer
+   📺 S1 E4 — Manly Whatnots
+   ⏱ 23:09 / 42:09
 ```
 
 ---
@@ -28,15 +28,17 @@ Netflix Discord RPC automatically detects what you're watching on Netflix (Firef
 ## 🧩 How it works
 
 ```
-Firefox Extension  ──► reads Netflix title, episode & timestamp
+Edge Extension     ──► accesses Netflix internal player API (window.netflix)
         │
-        │  HTTP POST (localhost:6969)
+        │  HTTPS POST (localhost:27843)
         ▼
 Node.js RPC Server ──► pushes activity to Discord via IPC
         │
         ▼
 Discord Desktop App ──► displays Rich Presence on your profile
 ```
+
+> The extension runs in **MAIN world** context, meaning it has direct access to Netflix's internal JavaScript API (`window.netflix`) to reliably extract the title, episode, and playback state — no fragile DOM scraping.
 
 ---
 
@@ -45,9 +47,10 @@ Discord Desktop App ──► displays Rich Presence on your profile
 | Requirement | Version |
 |---|---|
 | [Node.js](https://nodejs.org) | 18 or newer |
-| [Firefox](https://www.mozilla.org/firefox) | Any recent version |
+| [Microsoft Edge](https://www.microsoft.com/edge) | Any recent version |
 | [Discord Desktop](https://discord.com/download) | Must be running |
 | A Discord Application | [Create one here](https://discord.com/developers/applications) |
+| OpenSSL or Node.js (`node-forge`) | For self-signed SSL certificate |
 
 ---
 
@@ -68,7 +71,49 @@ Discord Desktop App ──► displays Rich Presence on your profile
 
 ---
 
-### 2. Set up the Node.js Server
+### 2. Generate a Self-Signed SSL Certificate
+
+The server must run over **HTTPS** because Netflix blocks HTTP requests to localhost via its Content Security Policy.
+
+**Option A — Git Bash / OpenSSL:**
+```bash
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=localhost"
+```
+
+**Option B — Node.js (no OpenSSL needed):**
+
+Create `generate-cert.js`:
+```js
+const forge = require('node-forge');
+const fs = require('fs');
+
+const pki = forge.pki;
+const keys = pki.rsa.generateKeyPair(2048);
+const cert = pki.createCertificate();
+cert.publicKey = keys.publicKey;
+cert.serialNumber = '01';
+cert.validity.notBefore = new Date();
+cert.validity.notAfter = new Date();
+cert.validity.notAfter.setFullYear(cert.validity.notBefore.getFullYear() + 1);
+const attrs = [{ name: 'commonName', value: 'localhost' }];
+cert.setSubject(attrs);
+cert.setIssuer(attrs);
+cert.sign(keys.privateKey);
+fs.writeFileSync('cert.pem', pki.certificateToPem(cert));
+fs.writeFileSync('key.pem', pki.privateKeyToPem(keys.privateKey));
+console.log('✅ cert.pem and key.pem generated!');
+```
+
+```bash
+npm install node-forge
+node generate-cert.js
+```
+
+> ⚠️ Keep `key.pem` and `cert.pem` in your server folder — **never inside the extension folder**.
+
+---
+
+### 3. Set up the Node.js Server
 
 ```bash
 # Clone the repository
@@ -76,14 +121,23 @@ git clone https://github.com/your-username/netflix-discord-rpc.git
 cd netflix-discord-rpc
 
 # Install dependencies
-cd netflix-rpc-server
 npm install
 ```
 
-Open `server.js` and paste your Discord **Client ID**:
+Open `server.js` and configure:
 
 ```js
-const CLIENT_ID = 'YOUR_DISCORD_CLIENT_ID'; // ← replace this
+const CLIENT_ID = 'YOUR_DISCORD_CLIENT_ID'; // ← paste your Discord app Client ID
+const PORT = 27843;
+```
+
+Also update the certificate paths to match where you saved them:
+
+```js
+const sslOptions = {
+  key: fs.readFileSync('C:\\Users\\YourName\\Desktop\\key.pem'),
+  cert: fs.readFileSync('C:\\Users\\YourName\\Desktop\\cert.pem'),
+};
 ```
 
 Start the server (**make sure Discord is already open**):
@@ -95,26 +149,36 @@ node server.js
 You should see:
 
 ```
-🚀 Netflix RPC server running on http://localhost:6969
+🚀 Netflix RPC server running on https://localhost:27843
 ✅ Discord RPC connected as: YourUsername
 ```
 
 ---
 
-### 3. Load the Firefox Extension
+### 4. Trust the SSL Certificate in Edge
 
-1. Open Firefox and navigate to `about:debugging`
-2. Click **This Firefox** in the left sidebar
-3. Click **Load Temporary Add-on...**
-4. Browse to the `netflix-extension/` folder and select `manifest.json`
+1. Open Edge and go to `https://localhost:27843/status`
+2. Click **Advanced → Continue to localhost (unsafe)**
+3. You should see: `{"rpcReady":true,"currentActivity":null}`
 
-The extension is now active. It will silently poll the Netflix tab every 5 seconds.
+> You only need to do this once. Without this step, Edge will silently block all requests to the local server.
 
 ---
 
-### 4. Watch something on Netflix
+### 5. Load the Edge Extension
 
-Open [netflix.com](https://www.netflix.com) in Firefox and start playing any title. Your Discord status will update within **5 seconds**.
+1. Open Edge and go to `edge://extensions`
+2. Enable **Developer mode** (bottom-left toggle)
+3. Click **Load unpacked**
+4. Select the `Netflix-Extension/` folder
+
+The extension is now active and will poll Netflix every 5 seconds.
+
+---
+
+### 6. Watch something on Netflix
+
+Open [netflix.com](https://www.netflix.com) in Edge and start playing any title. Your Discord status will update within **5 seconds**.
 
 ---
 
@@ -122,14 +186,14 @@ Open [netflix.com](https://www.netflix.com) in Firefox and start playing any tit
 
 ```
 netflix-discord-rpc/
-├── netflix-rpc-server/
-│   ├── server.js          # Express server + Discord RPC bridge
-│   └── package.json
+├── server.js              # Express HTTPS server + Discord RPC bridge
+├── package.json
+├── generate-cert.js       # One-time SSL certificate generator
 │
-└── netflix-extension/
-    ├── manifest.json       # Firefox extension manifest
-    ├── content.js          # Reads Netflix playback data from the DOM
-    └── background.js       # Required background script
+└── Netflix-Extension/
+    ├── manifest.json      # Edge extension manifest (Manifest V3)
+    ├── content.js         # Reads Netflix internal API & sends to server
+    └── background.js      # Service worker (required by MV3)
 ```
 
 ---
@@ -141,7 +205,7 @@ All config lives at the top of `server.js`:
 | Variable | Default | Description |
 |---|---|---|
 | `CLIENT_ID` | `YOUR_DISCORD_CLIENT_ID` | Your Discord app's Client ID |
-| `PORT` | `6969` | Local port the server listens on |
+| `PORT` | `27843` | Local HTTPS port the server listens on |
 
 The extension polls Netflix every **5 seconds** — you can adjust this in `content.js`:
 
@@ -157,7 +221,7 @@ The local server exposes a small REST API for debugging:
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/update` | Receives playback data from the Firefox extension |
+| `POST` | `/update` | Receives playback data from the Edge extension |
 | `GET` | `/clear` | Clears the Discord activity manually |
 | `GET` | `/status` | Returns current RPC connection state and activity |
 
@@ -169,10 +233,16 @@ The local server exposes a small REST API for debugging:
 > Make sure the Discord desktop app is open *before* starting the Node.js server. The server retries the connection every 10 seconds automatically.
 
 **Status not updating on Netflix**
-> Confirm the Firefox extension loaded in `about:debugging`. Netflix occasionally updates its player UI — if selectors break, open the browser console on a Netflix watch page, inspect the player controls, and update the selectors in `content.js`.
+> Make sure you visited `https://localhost:27843/status` in Edge and accepted the certificate. Without this, all requests are silently blocked. Also confirm the extension is loaded in `edge://extensions`.
 
-**`ECONNREFUSED` errors in the extension console**
-> This just means the Node.js server isn't running. Start it with `node server.js` and the errors will stop.
+**`{"rpcReady":true,"currentActivity":null}` but nothing updates**
+> Hard refresh the Netflix tab (`Ctrl+Shift+R`) after loading the extension, then play something and wait 5 seconds.
+
+**Edge warning about `key.pem` in extension folder**
+> Move `key.pem` and `cert.pem` out of the extension folder into your server folder. They should never be bundled with the extension.
+
+**Edge popup on every launch asking to disable the extension**
+> This is normal for unpacked Developer Mode extensions. To avoid it permanently, publish the extension to the Edge Add-ons store.
 
 **Timer not showing**
 > The countdown timer only appears when a video is actively playing and has a known duration. It disappears when paused — this is by design.
@@ -181,11 +251,11 @@ The local server exposes a small REST API for debugging:
 
 ## 🤝 Contributing
 
-Pull requests are welcome! If Netflix updates their player and the selectors break, feel free to open an issue or PR with the fix.
+Pull requests are welcome! If Netflix updates their internal API and the extension breaks, feel free to open an issue or PR with the fix.
 
 1. Fork the repo
-2. Create a feature branch: `git checkout -b fix/player-selectors`
-3. Commit your changes: `git commit -m 'fix: update Netflix DOM selectors'`
+2. Create a feature branch: `git checkout -b fix/netflix-api`
+3. Commit your changes: `git commit -m 'fix: update Netflix internal API access'`
 4. Push and open a Pull Request
 
 ---
