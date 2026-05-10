@@ -117,8 +117,8 @@ node generate-cert.js
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/netflix-discord-rpc.git
-cd netflix-discord-rpc
+git clone https://github.com/MABDesigns/netflix-extension.git
+cd netflix-extension
 
 # Install dependencies
 npm install
