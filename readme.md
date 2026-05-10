@@ -109,7 +109,7 @@ npm install node-forge
 node generate-cert.js
 ```
 
-> ⚠️ Keep `key.pem` and `cert.pem` in your server folder — **never inside the extension folder**.
+> ⚠️ Keep `key.pem` and `cert.pem` out of your server folder (if Edge refused the extension it's recommended to move em to Desktop. Try to update the path in server.js) — **never inside the extension folder**.
 
 ---
 
@@ -170,7 +170,7 @@ You should see:
 1. Open Edge and go to `edge://extensions`
 2. Enable **Developer mode** (bottom-left toggle)
 3. Click **Load unpacked**
-4. Select the `Netflix-Extension/` folder
+4. Select the `netflix-extension/` folder
 
 The extension is now active and will poll Netflix every 5 seconds.
 
@@ -185,15 +185,13 @@ Open [netflix.com](https://www.netflix.com) in Edge and start playing any title.
 ## 📁 Project Structure
 
 ```
-netflix-discord-rpc/
+netflix-extension/
 ├── server.js              # Express HTTPS server + Discord RPC bridge
 ├── package.json
-├── generate-cert.js       # One-time SSL certificate generator
-│
-└── Netflix-Extension/
-    ├── manifest.json      # Edge extension manifest (Manifest V3)
-    ├── content.js         # Reads Netflix internal API & sends to server
-    └── background.js      # Service worker (required by MV3)
+├── generate-cert.js       # One-time SSL certificate generator (after you create it)
+├── manifest.json      # Edge extension manifest (Manifest V3)
+├── content.js         # Reads Netflix internal API & sends to server
+└── background.js      # Service worker (required by MV3)
 ```
 
 ---
