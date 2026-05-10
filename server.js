@@ -6,8 +6,8 @@ const cors = require('cors');
 const DiscordRPC = require('discord-rpc');
 
 // ─── CONFIG ────────────────────────────────────────────────────────────────
-const CLIENT_ID = 'YOUR_DISCORD_CLIENT_ID'; // <-- paste your App's Client ID here
-const PORT = 6969;
+const CLIENT_ID = 'CLIENT_ID'; // <-- paste your App's Client ID here
+const PORT = 27843;
 // ───────────────────────────────────────────────────────────────────────────
 
 const app = express();
@@ -128,7 +128,15 @@ app.get('/status', (req, res) => {
 
 // ─── START ──────────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
-  console.log(`\n🚀 Netflix RPC server running on http://localhost:${PORT}`);
+const https = require('https');
+const fs = require('fs');
+
+const sslOptions = {
+  key: fs.readFileSync('C:\\Users\\User\\Desktop\\key.pem'),
+  cert: fs.readFileSync('C:\\Users\\User\\Desktop\\cert.pem'),
+}; 
+
+https.createServer(sslOptions, app).listen(PORT, () => {
+  console.log(`\n🚀 Netflix RPC server running on https://localhost:${PORT}`);
   console.log(`   Waiting for Discord connection...\n`);
 });
