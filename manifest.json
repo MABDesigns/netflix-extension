@@ -1,21 +1,26 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "Netflix Discord RPC",
   "version": "1.0",
   "description": "Sends Netflix playback info to local Discord RPC server",
   "permissions": [
     "activeTab",
-    "tabs"
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://www.netflix.com/*",
+    "https://localhost/*"
   ],
   "content_scripts": [
     {
       "matches": ["*://www.netflix.com/*"],
       "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "background": {
-    "scripts": ["background.js"],
-    "persistent": false
+    "service_worker": "background.js"
   }
 }
